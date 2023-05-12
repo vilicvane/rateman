@@ -9,17 +9,34 @@ export interface RateLimitWindow {
   limit: number;
 }
 
-export class RateLimiter<TIdentifier = string> {
-  private windows: RateLimitWindow[];
+export type RateLimiterOptions = {
+  name: string;
+  recordThrottled?: boolean;
+  redis: Redis;
+} & (
+  | {window: RateLimitWindow}
+  | {windows: [RateLimitWindow, ...RateLimitWindow[]]}
+);
 
+export class RateLimiter<TIdentifier = string> {
+  readonly name: string;
+
+  private windows: RateLimitWindow[];
   private maxWindowSpan: number;
 
-  constructor(
-    readonly name: string,
-    windows: RateLimitWindow | [RateLimitWindow, ...RateLimitWindow[]],
-    private redis: Redis,
-  ) {
-    windows = Array.isArray(windows) ? windows : [windows];
+  private recordThrottled: boolean;
+
+  private redis: Redis;
+
+  constructor({
+    name,
+    recordThrottled = false,
+    redis,
+    ...rest
+  }: RateLimiterOptions) {
+    this.name = name;
+
+    const windows = 'windows' in rest ? rest.windows : [rest.window];
 
     windows.sort((a, b) => a.span - b.span);
 
@@ -46,18 +63,21 @@ export class RateLimiter<TIdentifier = string> {
 
     this.windows = windows;
     this.maxWindowSpan = windows[windows.length - 1].span;
+
+    this.recordThrottled = recordThrottled;
+    this.redis = redis;
   }
 
   /**
    * @returns A timestamp when the rate limit will be lifted, or `undefined` if
    */
   async hit(identifier: TIdentifier): Promise<number | undefined> {
-    const {redis} = this;
+    const {redis, windows, maxWindowSpan, recordThrottled} = this;
 
     const key = this.getKey(identifier);
 
     const now = Date.now();
-    const mostDistantRelevantSince = now - this.maxWindowSpan;
+    const mostDistantRelevantSince = now - maxWindowSpan;
 
     const score = now.toString();
 
@@ -83,7 +103,7 @@ export class RateLimiter<TIdentifier = string> {
 
     let timestampIndex = 0;
 
-    for (const {span, limit} of this.windows) {
+    for (const {span, limit} of windows) {
       if (all < limit) {
         // Even if all records are relevant, the limit is not reached. And it
         // would certainly be the case for next windows as the limit would be
@@ -107,8 +127,9 @@ export class RateLimiter<TIdentifier = string> {
 
       // Reaches the limit of current window.
       if (relevant >= limit) {
-        // If the current window is already full, remove the new record.
-        await redis.zrem(key, record);
+        if (!recordThrottled) {
+          await redis.zrem(key, record);
+        }
 
         // `timestamps[0]` would be the latest relevant timestamp.
         return timestamps[0] + span;
