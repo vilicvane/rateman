@@ -4,7 +4,12 @@ import Redis from 'ioredis';
 
 import {RateLimiter} from 'rateman';
 
-const redis = new Redis();
+const {REDIS_HOST, REDIS_PORT} = process.env;
+
+const redis = new Redis({
+  host: REDIS_HOST,
+  port: Number(REDIS_PORT) || undefined,
+});
 
 class TestRateLimiter extends RateLimiter {
   override getKeyPrefix(): string {
@@ -12,7 +17,9 @@ class TestRateLimiter extends RateLimiter {
   }
 }
 
-beforeAll(async () => cleanUpRedis(redis));
+beforeAll(async () => {
+  await cleanUpRedis(redis);
+});
 
 test('single window', async () => {
   const rateLimiter = new TestRateLimiter(
