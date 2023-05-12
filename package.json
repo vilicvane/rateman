@@ -1,0 +1,30 @@
+{
+  "name": "rateman",
+  "version": "0.0.0",
+  "description": "Redis-based rate limiter with multi-window support.",
+  "repository": "https://github.com/vilic/rateman.git",
+  "license": "MIT",
+  "author": "vilicvane",
+  "exports": {
+    "types": "./bld/library/index.d.ts",
+    "require": "./bld/library/index.js"
+  },
+  "scripts": {
+    "build": "rimraf ./bld && tsc --build",
+    "lint": "run-in-every eslint-project --parallel --echo -- eslint --config {configFileName} --no-error-on-unmatched-pattern .",
+    "lint-prettier": "prettier --check .",
+    "test": "yarn lint-prettier && yarn build && yarn lint"
+  },
+  "dependencies": {
+    "tslib": "^2.5.0"
+  },
+  "devDependencies": {
+    "@mufan/code": "^0.2.16",
+    "@mufan/eslint-plugin": "^0.1.77",
+    "eslint": "^8.40.0",
+    "prettier": "^2.8.8",
+    "rimraf": "^4.4.1",
+    "run-in-every": "^0.2.0",
+    "typescript": "^5.0.4"
+  }
+}
