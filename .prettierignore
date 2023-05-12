@@ -1,2 +1,5 @@
+/.magicspace/boilerplate.schema.json
 # TypeScript Build Artifacts
 bld/
+# Test
+/coverage/
