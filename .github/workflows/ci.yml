@@ -13,6 +13,5 @@ jobs:
         image: redis
     steps:
       - uses: actions/checkout@v3
-      - run: npm install --global yarn
       - run: yarn install
       - run: yarn test
