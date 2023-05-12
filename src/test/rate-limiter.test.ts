@@ -7,10 +7,12 @@ import {RateLimiter} from 'rateman';
 
 const {REDIS_HOST, REDIS_PORT} = process.env;
 
-const redis = new Redis({
+const REDIS_OPTIONS = {
   host: REDIS_HOST,
   port: Number(REDIS_PORT) || undefined,
-});
+};
+
+const redis = new Redis(REDIS_OPTIONS);
 
 class TestRateLimiter extends RateLimiter {
   override getKeyPrefix(): string {
@@ -116,33 +118,37 @@ test('record throttled', async () => {
     name: 'record-throttled',
     window: {span: 200, limit: 3},
     recordThrottled: true,
-    redis,
+    redis: REDIS_OPTIONS,
   });
 
-  for (let i = 0; i < 3; i++) {
-    await rateLimiter.throttle('foo');
-    await setTimeout(50);
-  }
+  try {
+    for (let i = 0; i < 3; i++) {
+      await rateLimiter.throttle('foo');
+      await setTimeout(50);
+    }
 
-  for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 3; i++) {
+      await expect(() =>
+        rateLimiter.throttle('foo'),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `"Rate limit "record-throttled" reached for identifier "foo"."`,
+      );
+      await setTimeout(50);
+    }
+
+    await setTimeout(100);
+
+    await rateLimiter.throttle('foo');
+    await rateLimiter.throttle('foo');
+
     await expect(() =>
       rateLimiter.throttle('foo'),
     ).rejects.toThrowErrorMatchingInlineSnapshot(
       `"Rate limit "record-throttled" reached for identifier "foo"."`,
     );
-    await setTimeout(50);
+  } finally {
+    await rateLimiter.redis.quit();
   }
-
-  await setTimeout(100);
-
-  await rateLimiter.throttle('foo');
-  await rateLimiter.throttle('foo');
-
-  await expect(() =>
-    rateLimiter.throttle('foo'),
-  ).rejects.toThrowErrorMatchingInlineSnapshot(
-    `"Rate limit "record-throttled" reached for identifier "foo"."`,
-  );
 });
 
 test('lifts at', async () => {

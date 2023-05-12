@@ -1,7 +1,9 @@
 import {randomBytes} from 'crypto';
 
-import type {Redis} from 'ioredis';
+import type {RedisOptions} from 'ioredis';
+import {Redis} from 'ioredis';
 
+import {isPlainObject} from './@utils';
 import {RateLimitReachedError} from './errors';
 
 export interface RateLimitWindow {
@@ -12,7 +14,7 @@ export interface RateLimitWindow {
 export type RateLimiterOptions = {
   name: string;
   recordThrottled?: boolean;
-  redis: Redis;
+  redis?: RedisOptions | Redis;
 } & (
   | {window: RateLimitWindow}
   | {windows: [RateLimitWindow, ...RateLimitWindow[]]}
@@ -21,12 +23,12 @@ export type RateLimiterOptions = {
 export class RateLimiter<TIdentifier = string> {
   readonly name: string;
 
-  private windows: RateLimitWindow[];
-  private maxWindowSpan: number;
+  readonly windows: RateLimitWindow[];
+  readonly maxWindowSpan: number;
 
-  private recordThrottled: boolean;
+  readonly recordThrottled: boolean;
 
-  private redis: Redis;
+  readonly redis: Redis;
 
   constructor({
     name,
@@ -65,7 +67,12 @@ export class RateLimiter<TIdentifier = string> {
     this.maxWindowSpan = windows[windows.length - 1].span;
 
     this.recordThrottled = recordThrottled;
-    this.redis = redis;
+
+    this.redis = redis
+      ? (isPlainObject as (value: unknown) => value is RedisOptions)(redis)
+        ? new Redis(redis)
+        : redis
+      : /* istanbul ignore next */ new Redis();
   }
 
   async throttle(identifier: TIdentifier): Promise<void> {
