@@ -11,14 +11,13 @@ export interface RateLimitWindow {
   limit: number;
 }
 
+export type RateLimitWindows = [RateLimitWindow, ...RateLimitWindow[]];
+
 export type RateLimiterOptions = {
   name: string;
   recordThrottled?: boolean;
   redis?: RedisOptions | Redis;
-} & (
-  | {window: RateLimitWindow}
-  | {windows: [RateLimitWindow, ...RateLimitWindow[]]}
-);
+} & ({window: RateLimitWindow} | {windows: RateLimitWindows});
 
 export class RateLimiter<TIdentifier = string> {
   readonly name: string;
