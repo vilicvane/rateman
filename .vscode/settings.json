@@ -17,5 +17,14 @@
     "javascriptreact",
     "typescript",
     "typescriptreact"
+  ],
+  "cSpell.words": [
+    "mufan",
+    "Rateman",
+    "vilicvane",
+    "zadd",
+    "zrange",
+    "zrem",
+    "zremrangebyscore"
   ]
 }

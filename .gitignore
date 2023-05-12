@@ -7,3 +7,5 @@ npm-debug.log
 # TypeScript Build Artifacts
 bld/
 *.tsbuildinfo
+# Test
+/coverage/

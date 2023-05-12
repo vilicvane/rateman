@@ -1,4 +1,4 @@
-# rateman
+# Rateman
 
 Just another awesome magic.
 
