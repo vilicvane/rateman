@@ -144,6 +144,28 @@ test('record throttled', async () => {
   );
 });
 
+test('lifts at', async () => {
+  const rateLimiter = new TestRateLimiter({
+    name: 'lifts-at',
+    window: {span: 500, limit: 3},
+    recordThrottled: true,
+    redis,
+  });
+
+  const startsAt = Date.now();
+
+  for (let i = 0; i < 3; i++) {
+    await rateLimiter.limit('foo');
+    await setTimeout(100);
+  }
+
+  const liftsAt = (await rateLimiter.hit('foo'))!.getTime();
+
+  const expectedLiftsAt = startsAt + 500;
+
+  expect(Math.abs(liftsAt - expectedLiftsAt) < 10).toBe(true);
+});
+
 test('invalid windows', () => {
   expect(
     () =>

@@ -71,7 +71,7 @@ export class RateLimiter<TIdentifier = string> {
   /**
    * @returns A timestamp when the rate limit will be lifted, or `undefined` if
    */
-  async hit(identifier: TIdentifier): Promise<number | undefined> {
+  async hit(identifier: TIdentifier): Promise<Date | undefined> {
     const {redis, windows, maxWindowSpan, recordThrottled} = this;
 
     const key = this.getKey(identifier);
@@ -131,8 +131,7 @@ export class RateLimiter<TIdentifier = string> {
           await redis.zrem(key, record);
         }
 
-        // `timestamps[0]` would be the latest relevant timestamp.
-        return timestamps[0] + span;
+        return new Date(timestamps[relevant - 1] + span);
       }
 
       // Impossible to reach here if all records are relevant and the limit is
@@ -158,9 +157,9 @@ export class RateLimiter<TIdentifier = string> {
   }
 
   async limit(identifier: TIdentifier): Promise<void> {
-    const liftsAtTimestamp = await this.hit(identifier);
+    const liftsAt = await this.hit(identifier);
 
-    if (liftsAtTimestamp === undefined) {
+    if (liftsAt === undefined) {
       return;
     }
 
@@ -170,7 +169,7 @@ export class RateLimiter<TIdentifier = string> {
       )} reached for identifier ${JSON.stringify(
         this.stringifyIdentifier(identifier),
       )}.`,
-      new Date(liftsAtTimestamp),
+      liftsAt,
     );
   }
 
