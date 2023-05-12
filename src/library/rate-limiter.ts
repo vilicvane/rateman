@@ -68,10 +68,7 @@ export class RateLimiter<TIdentifier = string> {
     this.redis = redis;
   }
 
-  /**
-   * @returns A timestamp when the rate limit will be lifted, or `undefined` if
-   */
-  async hit(identifier: TIdentifier): Promise<Date | undefined> {
+  async throttle(identifier: TIdentifier): Promise<void> {
     const {redis, windows, maxWindowSpan, recordThrottled} = this;
 
     const key = this.getKey(identifier);
@@ -108,7 +105,7 @@ export class RateLimiter<TIdentifier = string> {
         // Even if all records are relevant, the limit is not reached. And it
         // would certainly be the case for next windows as the limit would be
         // greater.
-        return undefined;
+        return;
       }
 
       // `windows` are sorted by `span` ascending, thus `relevantSince` would
@@ -131,7 +128,14 @@ export class RateLimiter<TIdentifier = string> {
           await redis.zrem(key, record);
         }
 
-        return new Date(timestamps[relevant - 1] + span);
+        throw new RateLimitReachedError(
+          `Rate limit ${JSON.stringify(
+            this.name,
+          )} reached for identifier ${JSON.stringify(
+            this.stringifyIdentifier(identifier),
+          )}.`,
+          timestamps[relevant - 1] + span,
+        );
       }
 
       // Impossible to reach here if all records are relevant and the limit is
@@ -151,29 +155,9 @@ export class RateLimiter<TIdentifier = string> {
 
     // As records before `mostDistantRelevantSince` are removed, it is
     // impossible to reach here.
-
-    /* istanbul ignore next */
-    return undefined;
   }
 
-  async limit(identifier: TIdentifier): Promise<void> {
-    const liftsAt = await this.hit(identifier);
-
-    if (liftsAt === undefined) {
-      return;
-    }
-
-    throw new RateLimitReachedError(
-      `Rate limit ${JSON.stringify(
-        this.name,
-      )} reached for identifier ${JSON.stringify(
-        this.stringifyIdentifier(identifier),
-      )}.`,
-      liftsAt,
-    );
-  }
-
-  async clear(identifier: TIdentifier): Promise<void> {
+  async reset(identifier: TIdentifier): Promise<void> {
     const key = this.getKey(identifier);
 
     await this.redis.del(key);

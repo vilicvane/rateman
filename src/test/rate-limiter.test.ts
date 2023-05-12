@@ -2,6 +2,7 @@ import {setTimeout} from 'timers/promises';
 
 import Redis from 'ioredis';
 
+import type {RateLimitReachedError} from 'rateman';
 import {RateLimiter} from 'rateman';
 
 const {REDIS_HOST, REDIS_PORT} = process.env;
@@ -28,33 +29,33 @@ test('single window', async () => {
     redis,
   });
 
-  await rateLimiter.limit('foo');
-  await rateLimiter.limit('foo');
-  await rateLimiter.limit('foo');
+  await rateLimiter.throttle('foo');
+  await rateLimiter.throttle('foo');
+  await rateLimiter.throttle('foo');
 
-  await rateLimiter.limit('bar');
-  await rateLimiter.limit('bar');
+  await rateLimiter.throttle('bar');
+  await rateLimiter.throttle('bar');
 
   await expect(() =>
-    rateLimiter.limit('foo'),
+    rateLimiter.throttle('foo'),
   ).rejects.toThrowErrorMatchingInlineSnapshot(
     `"Rate limit "single-window" reached for identifier "foo"."`,
   );
 
   await setTimeout(200);
 
-  await rateLimiter.limit('foo');
+  await rateLimiter.throttle('foo');
   await setTimeout(20);
-  await rateLimiter.limit('foo');
+  await rateLimiter.throttle('foo');
   await setTimeout(20);
-  await rateLimiter.limit('foo');
+  await rateLimiter.throttle('foo');
   await setTimeout(20);
 
-  await rateLimiter.limit('bar');
-  await rateLimiter.limit('bar');
+  await rateLimiter.throttle('bar');
+  await rateLimiter.throttle('bar');
 
   await expect(() =>
-    rateLimiter.limit('foo'),
+    rateLimiter.throttle('foo'),
   ).rejects.toThrowErrorMatchingInlineSnapshot(
     `"Rate limit "single-window" reached for identifier "foo"."`,
   );
@@ -76,35 +77,35 @@ test('multiple windows', async () => {
     redis,
   });
 
-  await rateLimiter.limit('foo');
-  await rateLimiter.limit('foo');
-  await rateLimiter.limit('foo');
+  await rateLimiter.throttle('foo');
+  await rateLimiter.throttle('foo');
+  await rateLimiter.throttle('foo');
 
   await expect(() =>
-    rateLimiter.limit('foo'),
+    rateLimiter.throttle('foo'),
   ).rejects.toThrowErrorMatchingInlineSnapshot(
     `"Rate limit "multiple-windows" reached for identifier "foo"."`,
   );
 
   await setTimeout(200);
 
-  await rateLimiter.limit('foo');
-  await rateLimiter.limit('foo');
+  await rateLimiter.throttle('foo');
+  await rateLimiter.throttle('foo');
 
   await expect(() =>
-    rateLimiter.limit('foo'),
+    rateLimiter.throttle('foo'),
   ).rejects.toThrowErrorMatchingInlineSnapshot(
     `"Rate limit "multiple-windows" reached for identifier "foo"."`,
   );
 
-  await rateLimiter.clear('foo');
+  await rateLimiter.reset('foo');
 
-  await rateLimiter.limit('foo');
-  await rateLimiter.limit('foo');
-  await rateLimiter.limit('foo');
+  await rateLimiter.throttle('foo');
+  await rateLimiter.throttle('foo');
+  await rateLimiter.throttle('foo');
 
   await expect(() =>
-    rateLimiter.limit('foo'),
+    rateLimiter.throttle('foo'),
   ).rejects.toThrowErrorMatchingInlineSnapshot(
     `"Rate limit "multiple-windows" reached for identifier "foo"."`,
   );
@@ -119,13 +120,13 @@ test('record throttled', async () => {
   });
 
   for (let i = 0; i < 3; i++) {
-    await rateLimiter.limit('foo');
+    await rateLimiter.throttle('foo');
     await setTimeout(50);
   }
 
   for (let i = 0; i < 3; i++) {
     await expect(() =>
-      rateLimiter.limit('foo'),
+      rateLimiter.throttle('foo'),
     ).rejects.toThrowErrorMatchingInlineSnapshot(
       `"Rate limit "record-throttled" reached for identifier "foo"."`,
     );
@@ -134,11 +135,11 @@ test('record throttled', async () => {
 
   await setTimeout(100);
 
-  await rateLimiter.limit('foo');
-  await rateLimiter.limit('foo');
+  await rateLimiter.throttle('foo');
+  await rateLimiter.throttle('foo');
 
   await expect(() =>
-    rateLimiter.limit('foo'),
+    rateLimiter.throttle('foo'),
   ).rejects.toThrowErrorMatchingInlineSnapshot(
     `"Rate limit "record-throttled" reached for identifier "foo"."`,
   );
@@ -152,18 +153,18 @@ test('lifts at', async () => {
     redis,
   });
 
-  const startsAt = Date.now();
+  const expectedLiftsAt = Date.now() + 500;
 
   for (let i = 0; i < 3; i++) {
-    await rateLimiter.limit('foo');
+    await rateLimiter.throttle('foo');
     await setTimeout(100);
   }
 
-  const liftsAt = (await rateLimiter.hit('foo'))!.getTime();
+  const liftsAt = await rateLimiter
+    .throttle('foo')
+    .catch(error => (error as RateLimitReachedError).liftsAt);
 
-  const expectedLiftsAt = startsAt + 500;
-
-  expect(Math.abs(liftsAt - expectedLiftsAt) < 10).toBe(true);
+  expect(Math.abs(liftsAt! - expectedLiftsAt) < 10).toBe(true);
 });
 
 test('invalid windows', () => {
