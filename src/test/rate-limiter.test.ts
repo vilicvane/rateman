@@ -39,7 +39,7 @@ test('single window', async () => {
   await expect(() =>
     rateLimiter.attempt('foo'),
   ).rejects.toThrowErrorMatchingInlineSnapshot(
-    `"Rate limit "single-window" reached for identifier "foo"."`,
+    `"Rate limit "single-window" exceeded for identifier "foo"."`,
   );
 
   await setTimeout(200);
@@ -57,7 +57,7 @@ test('single window', async () => {
   await expect(() =>
     rateLimiter.attempt('foo'),
   ).rejects.toThrowErrorMatchingInlineSnapshot(
-    `"Rate limit "single-window" reached for identifier "foo"."`,
+    `"Rate limit "single-window" exceeded for identifier "foo"."`,
   );
 });
 
@@ -82,7 +82,7 @@ test('multiple windows', async () => {
   await expect(() =>
     rateLimiter.attempt('foo'),
   ).rejects.toThrowErrorMatchingInlineSnapshot(
-    `"Rate limit "multiple-windows" reached for identifier "foo"."`,
+    `"Rate limit "multiple-windows" exceeded for identifier "foo"."`,
   );
 
   await setTimeout(200);
@@ -93,7 +93,7 @@ test('multiple windows', async () => {
   await expect(() =>
     rateLimiter.attempt('foo'),
   ).rejects.toThrowErrorMatchingInlineSnapshot(
-    `"Rate limit "multiple-windows" reached for identifier "foo"."`,
+    `"Rate limit "multiple-windows" exceeded for identifier "foo"."`,
   );
 
   await rateLimiter.reset('foo');
@@ -105,7 +105,7 @@ test('multiple windows', async () => {
   await expect(() =>
     rateLimiter.attempt('foo'),
   ).rejects.toThrowErrorMatchingInlineSnapshot(
-    `"Rate limit "multiple-windows" reached for identifier "foo"."`,
+    `"Rate limit "multiple-windows" exceeded for identifier "foo"."`,
   );
 });
 
@@ -114,37 +114,43 @@ test('record throttled', async () => {
     name: 'record-throttled',
     window: {span: 200, limit: 3},
     recordThrottled: true,
-    redis: REDIS_OPTIONS,
+    redis,
   });
 
-  try {
-    for (let i = 0; i < 3; i++) {
-      await rateLimiter.attempt('foo');
-      await setTimeout(50);
-    }
+  await rateLimiter.attempt('foo');
+  await setTimeout(50);
+  await rateLimiter.attempt('foo');
+  await setTimeout(50);
+  await rateLimiter.attempt('foo');
+  await setTimeout(50);
 
-    for (let i = 0; i < 3; i++) {
-      await expect(() =>
-        rateLimiter.attempt('foo'),
-      ).rejects.toThrowErrorMatchingInlineSnapshot(
-        `"Rate limit "record-throttled" reached for identifier "foo"."`,
-      );
-      await setTimeout(50);
-    }
+  await expect(() =>
+    rateLimiter.attempt('foo'),
+  ).rejects.toThrowErrorMatchingInlineSnapshot(
+    `"Rate limit "record-throttled" exceeded for identifier "foo"."`,
+  );
+  await setTimeout(50);
+  await expect(() =>
+    rateLimiter.attempt('foo'),
+  ).rejects.toThrowErrorMatchingInlineSnapshot(
+    `"Rate limit "record-throttled" exceeded for identifier "foo"."`,
+  );
+  await setTimeout(50);
+  await expect(() =>
+    rateLimiter.attempt('foo'),
+  ).rejects.toThrowErrorMatchingInlineSnapshot(
+    `"Rate limit "record-throttled" exceeded for identifier "foo"."`,
+  );
+  await setTimeout(150);
 
-    await setTimeout(100);
+  await rateLimiter.attempt('foo');
+  await rateLimiter.attempt('foo');
 
-    await rateLimiter.attempt('foo');
-    await rateLimiter.attempt('foo');
-
-    await expect(() =>
-      rateLimiter.attempt('foo'),
-    ).rejects.toThrowErrorMatchingInlineSnapshot(
-      `"Rate limit "record-throttled" reached for identifier "foo"."`,
-    );
-  } finally {
-    await rateLimiter.redis.quit();
-  }
+  await expect(() =>
+    rateLimiter.attempt('foo'),
+  ).rejects.toThrowErrorMatchingInlineSnapshot(
+    `"Rate limit "record-throttled" exceeded for identifier "foo"."`,
+  );
 });
 
 test('lifts at', async () => {
@@ -156,10 +162,12 @@ test('lifts at', async () => {
 
   const expectedLiftsAt = Date.now() + 500;
 
-  for (let i = 0; i < 3; i++) {
-    await rateLimiter.attempt('foo');
-    await setTimeout(100);
-  }
+  await rateLimiter.attempt('foo');
+  await setTimeout(100);
+  await rateLimiter.attempt('foo');
+  await setTimeout(100);
+  await rateLimiter.attempt('foo');
+  await setTimeout(100);
 
   const liftsAt = await rateLimiter
     .attempt('foo')
@@ -174,8 +182,28 @@ test('lifts at', async () => {
   await expect(() =>
     rateLimiter.attempt('foo'),
   ).rejects.toThrowErrorMatchingInlineSnapshot(
-    `"Rate limit "lifts-at" reached for identifier "foo"."`,
+    `"Rate limit "lifts-at" exceeded for identifier "foo"."`,
   );
+});
+
+test('redis options', async () => {
+  const rateLimiter = new TestRateLimiter({
+    name: 'redis-options',
+    window: {span: 200, limit: 1},
+    redis: REDIS_OPTIONS,
+  });
+
+  try {
+    await rateLimiter.attempt('foo');
+
+    await expect(() =>
+      rateLimiter.attempt('foo'),
+    ).rejects.toThrowErrorMatchingInlineSnapshot(
+      `"Rate limit "redis-options" exceeded for identifier "foo"."`,
+    );
+  } finally {
+    await rateLimiter.redis.quit();
+  }
 });
 
 test('invalid windows', () => {
