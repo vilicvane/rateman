@@ -2,7 +2,7 @@ import {setTimeout} from 'timers/promises';
 
 import Redis from 'ioredis';
 
-import type {RateLimitReachedError} from 'rateman';
+import type {RateLimitExceededError} from 'rateman';
 import {RateLimiter} from 'rateman';
 
 const {REDIS_HOST, REDIS_PORT} = process.env;
@@ -31,9 +31,7 @@ test('single window', async () => {
     redis,
   });
 
-  await rateLimiter.attempt('foo');
-  await rateLimiter.attempt('foo');
-  await rateLimiter.attempt('foo');
+  await rateLimiter.attempt('foo', 3);
 
   await rateLimiter.attempt('bar');
   await rateLimiter.attempt('bar');
@@ -79,9 +77,7 @@ test('multiple windows', async () => {
     redis,
   });
 
-  await rateLimiter.attempt('foo');
-  await rateLimiter.attempt('foo');
-  await rateLimiter.attempt('foo');
+  await rateLimiter.attempt('foo', {multiplier: 3});
 
   await expect(() =>
     rateLimiter.attempt('foo'),
@@ -167,13 +163,13 @@ test('lifts at', async () => {
 
   const liftsAt = await rateLimiter
     .attempt('foo')
-    .catch(error => (error as RateLimitReachedError).liftsAt);
+    .catch(error => (error as RateLimitExceededError).liftsAt);
 
   expect(Math.abs(liftsAt! - expectedLiftsAt) < 10).toBe(true);
 
-  await rateLimiter.throttle('foo');
+  await rateLimiter.throttle('foo', 2);
 
-  expect(Math.abs(Date.now() - expectedLiftsAt) < 10).toBe(true);
+  expect(Math.abs(Date.now() - (expectedLiftsAt + 100)) < 20).toBe(true);
 
   await expect(() =>
     rateLimiter.attempt('foo'),
@@ -223,6 +219,32 @@ test('invalid windows', () => {
       }),
   ).toThrowErrorMatchingInlineSnapshot(
     `"Narrower window with equal or greater \`limit / span\` rate than wider ones is useless."`,
+  );
+});
+
+test('invalid multiplier', async () => {
+  const rateLimiter = new TestRateLimiter({
+    name: 'invalid-multiplier',
+    window: {span: 100, limit: 3},
+    redis,
+  });
+
+  await expect(() =>
+    rateLimiter.throttle('foo', {multiplier: 0}),
+  ).rejects.toThrowErrorMatchingInlineSnapshot(
+    `"Option \`multiplier\` must be greater than zero."`,
+  );
+
+  await expect(() =>
+    rateLimiter.throttle('foo', {multiplier: 4}),
+  ).rejects.toThrowErrorMatchingInlineSnapshot(
+    `"Option \`multiplier\` cannot be greater than the minimum window limit."`,
+  );
+
+  await expect(() =>
+    rateLimiter.throttle('foo', {multiplier: 1.5}),
+  ).rejects.toThrowErrorMatchingInlineSnapshot(
+    `"Option \`multiplier\` must be an integer."`,
   );
 });
 

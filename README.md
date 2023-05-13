@@ -16,7 +16,7 @@ npm install rateman
 
 ```js
 import ms from 'ms';
-import {RateLimiter, RateLimitReachedError} from 'rateman';
+import {RateLimiter, RateLimitExceededError} from 'rateman';
 
 const rateLimiter = new RateLimiter({
   name: 'user',
@@ -29,13 +29,29 @@ const rateLimiter = new RateLimiter({
 try {
   await rateLimiter.attempt('<user id>');
 } catch (error) {
-  if (error instanceof RateLimitReachedError) {
+  if (error instanceof RateLimitExceededError) {
     console.error('rate limit reached', error.liftsAt);
   } else {
     console.error(error);
   }
 }
 ```
+
+## Methods
+
+### Attempts
+
+Rateman provides three methods that record attempts: `attempt()`, `throttle()` and the under the hood `record()`.
+
+You can also use the `multiplier` option to record multiple attempts at once:
+
+```js
+await rateLimiter.attempt('<user id>', 3);
+```
+
+### Reset
+
+Use `reset()` to reset the limit for an identifier.
 
 ## Options
 

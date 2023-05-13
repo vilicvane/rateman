@@ -5,7 +5,7 @@ import type {RedisOptions} from 'ioredis';
 import {Redis} from 'ioredis';
 
 import {isPlainObject} from './@utils';
-import {RateLimitReachedError} from './errors';
+import {RateLimitExceededError} from './errors';
 
 export interface RateLimitWindow {
   span: number;
@@ -24,6 +24,7 @@ export class RateLimiter<TIdentifier = string> {
   readonly name: string;
 
   readonly windows: RateLimitWindow[];
+  readonly minWindowLimit: number;
   readonly maxWindowSpan: number;
 
   readonly recordThrottled: boolean;
@@ -64,6 +65,7 @@ export class RateLimiter<TIdentifier = string> {
     );
 
     this.windows = windows;
+    this.minWindowLimit = windows[0].limit;
     this.maxWindowSpan = windows[windows.length - 1].span;
 
     this.recordThrottled = recordThrottled;
@@ -76,19 +78,22 @@ export class RateLimiter<TIdentifier = string> {
   }
 
   /**
-   * Record a new attempt, throw if rate limit is reached.
+   * Record a new attempt, throw if rate limit exceeded.
    */
-  async attempt(identifier: TIdentifier): Promise<void> {
-    const liftsAt = await this.record(identifier);
+  async attempt(
+    identifier: TIdentifier,
+    options?: number | RecordOptions,
+  ): Promise<void> {
+    const liftsAt = await this.record(identifier, options);
 
     if (liftsAt === undefined) {
       return;
     }
 
-    throw new RateLimitReachedError(
+    throw new RateLimitExceededError(
       `Rate limit ${JSON.stringify(
         this.name,
-      )} reached for identifier ${JSON.stringify(
+      )} exceeded for identifier ${JSON.stringify(
         this.stringifyIdentifier(identifier),
       )}.`,
       liftsAt,
@@ -98,9 +103,17 @@ export class RateLimiter<TIdentifier = string> {
   /**
    * Record a new attempt, but wait until rate limit is lifted if reached.
    */
-  async throttle(identifier: TIdentifier): Promise<void> {
+  async throttle(
+    identifier: TIdentifier,
+    options?: number | ThrottleOptions,
+  ): Promise<void> {
+    const recordOptions: RecordOptions = {
+      ...(typeof options === 'number' ? {multiplier: options} : options),
+      recordThrottledOverride: false,
+    };
+
     while (true) {
-      const liftsAt = await this.record(identifier, false);
+      const liftsAt = await this.record(identifier, recordOptions);
 
       if (liftsAt === undefined) {
         return;
@@ -121,14 +134,35 @@ export class RateLimiter<TIdentifier = string> {
   /**
    * Record a new attempt.
    *
-   * @returns `undefined` if rate limit is not reached, otherwise the timestamp
+   * @returns `undefined` if rate limit is not exceeded, otherwise the timestamp
    * in milliseconds.
    */
   async record(
     identifier: TIdentifier,
-    recordThrottledOverride?: boolean,
+    options: number | RecordOptions = {},
   ): Promise<number | undefined> {
-    const {redis, windows, maxWindowSpan, recordThrottled} = this;
+    if (typeof options === 'number') {
+      options = {multiplier: options};
+    }
+
+    const {multiplier = 1, recordThrottledOverride} = options;
+
+    const {redis, windows, minWindowLimit, maxWindowSpan, recordThrottled} =
+      this;
+
+    if (multiplier <= 0) {
+      throw new Error('Option `multiplier` must be greater than zero.');
+    }
+
+    if (multiplier > minWindowLimit) {
+      throw new Error(
+        'Option `multiplier` cannot be greater than the minimum window limit.',
+      );
+    }
+
+    if (!Number.isInteger(multiplier)) {
+      throw new Error('Option `multiplier` must be an integer.');
+    }
 
     const key = this.getKey(identifier);
 
@@ -137,22 +171,25 @@ export class RateLimiter<TIdentifier = string> {
 
     const score = now.toString();
 
-    const record = `${now}#${randomBytes(4).toString('hex')}`;
+    const record = `${now}#${multiplier}#${randomBytes(4).toString('hex')}`;
 
-    const [, [, records]] = (await redis
+    const [, , [, records]] = (await redis
       .multi()
       // Remove records that are older than `mostDistantRelevantSince`.
       .zremrangebyscore(key, 0, mostDistantRelevantSince)
-      // Get remaining records.
-      .zrange(key, 0, -1)
       // Add new record.
       .zadd(key, score, record)
-      .exec()) as [[], [null, string[]]];
+      // Get remaining records.
+      .zrange(key, 0, -1)
+      .exec()) as [unknown, unknown, [null, string[]]];
 
     // `timestamps` are sorted descending, and essentially represent timestamps
     // of previous records.
     const timestamps = records
-      .map(record => Number(record.split('#')[0]))
+      .flatMap(record => {
+        const [timestamp, multiplier] = record.split('#');
+        return new Array(Number(multiplier)).fill(Number(timestamp));
+      })
       .reverse();
 
     const all = timestamps.length;
@@ -160,8 +197,8 @@ export class RateLimiter<TIdentifier = string> {
     let timestampIndex = 0;
 
     for (const {span, limit} of windows) {
-      if (all < limit) {
-        // Even if all records are relevant, the limit is not reached. And it
+      if (all <= limit) {
+        // Even if all records are relevant, the limit is not exceeded. And it
         // would certainly be the case for next windows as the limit would be
         // greater.
         return undefined;
@@ -181,17 +218,25 @@ export class RateLimiter<TIdentifier = string> {
           ? all
           : firstRelativeIrrelevantIndex + timestampIndex;
 
-      // Reaches the limit of current window.
-      if (relevant >= limit) {
+      // Exceeds the limit of current window.
+      if (relevant > limit) {
         if (!(recordThrottledOverride ?? recordThrottled)) {
           await redis.zrem(key, record);
         }
 
-        return timestamps[relevant - 1] + span;
+        // Assuming `multiplier` is 2, `limit` is 4, and we have 3 relevant
+        // attempts before.
+
+        // [n1, n2, r1, r2, r3, ...]
+
+        // What we need now is waiting r3 to become irrelevant so we can fit in
+        // n1 and n2 together. And the index of r3 is simply `limit`.
+
+        return timestamps[limit] + span;
       }
 
       // Impossible to reach here if all records are relevant and the limit is
-      // not reached. So the code below is not needed:
+      // not exceeded. So the code below is not needed:
 
       // if (relevant === all) {
       //   return undefined;
@@ -233,3 +278,10 @@ export class RateLimiter<TIdentifier = string> {
     return String(identifier);
   }
 }
+
+export interface RecordOptions {
+  multiplier?: number;
+  recordThrottledOverride?: boolean;
+}
+
+export type ThrottleOptions = Omit<RecordOptions, 'recordThrottledOverride'>;
