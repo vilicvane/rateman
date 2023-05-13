@@ -80,9 +80,9 @@ const rateLimiterA = new RateLimiter({
 
 ### Record Throttled
 
-Rateman by default ignores throttled requests. It means that if a request is throttled, it will not have effect on the subsequential requests.
+Rateman by default ignores throttled attempts. It means that if an attempt is throttled, it will not have effect on the subsequential attempts.
 
-Otherwise you can enable `recordThrottled` to record throttled requests.
+Otherwise you can enable `recordThrottled` to record throttled attempts.
 
 ```js
 const rateLimiter = new RateLimiter({
