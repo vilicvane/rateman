@@ -1,4 +1,5 @@
 import {randomBytes} from 'crypto';
+import {setTimeout} from 'timers/promises';
 
 import type {RedisOptions} from 'ioredis';
 import {Redis} from 'ioredis';
@@ -74,7 +75,59 @@ export class RateLimiter<TIdentifier = string> {
       : /* istanbul ignore next */ new Redis();
   }
 
+  /**
+   * Record a new attempt, throw if rate limit is reached.
+   */
+  async attempt(identifier: TIdentifier): Promise<void> {
+    const liftsAt = await this.record(identifier);
+
+    if (liftsAt === undefined) {
+      return;
+    }
+
+    throw new RateLimitReachedError(
+      `Rate limit ${JSON.stringify(
+        this.name,
+      )} reached for identifier ${JSON.stringify(
+        this.stringifyIdentifier(identifier),
+      )}.`,
+      liftsAt,
+    );
+  }
+
+  /**
+   * Record a new attempt, but wait until rate limit is lifted if reached.
+   */
   async throttle(identifier: TIdentifier): Promise<void> {
+    while (true) {
+      const liftsAt = await this.record(identifier, false);
+
+      if (liftsAt === undefined) {
+        return;
+      }
+
+      const delay = liftsAt - Date.now();
+
+      /* istanbul ignore next */
+      if (delay <= 0) {
+        // Being cautious here.
+        return;
+      }
+
+      await setTimeout(delay);
+    }
+  }
+
+  /**
+   * Record a new attempt.
+   *
+   * @returns `undefined` if rate limit is not reached, otherwise the timestamp
+   * in milliseconds.
+   */
+  async record(
+    identifier: TIdentifier,
+    recordThrottledOverride?: boolean,
+  ): Promise<number | undefined> {
     const {redis, windows, maxWindowSpan, recordThrottled} = this;
 
     const key = this.getKey(identifier);
@@ -111,7 +164,7 @@ export class RateLimiter<TIdentifier = string> {
         // Even if all records are relevant, the limit is not reached. And it
         // would certainly be the case for next windows as the limit would be
         // greater.
-        return;
+        return undefined;
       }
 
       // `windows` are sorted by `span` ascending, thus `relevantSince` would
@@ -130,18 +183,11 @@ export class RateLimiter<TIdentifier = string> {
 
       // Reaches the limit of current window.
       if (relevant >= limit) {
-        if (!recordThrottled) {
+        if (!(recordThrottledOverride ?? recordThrottled)) {
           await redis.zrem(key, record);
         }
 
-        throw new RateLimitReachedError(
-          `Rate limit ${JSON.stringify(
-            this.name,
-          )} reached for identifier ${JSON.stringify(
-            this.stringifyIdentifier(identifier),
-          )}.`,
-          timestamps[relevant - 1] + span,
-        );
+        return timestamps[relevant - 1] + span;
       }
 
       // Impossible to reach here if all records are relevant and the limit is
@@ -161,6 +207,9 @@ export class RateLimiter<TIdentifier = string> {
 
     // As records before `mostDistantRelevantSince` are removed, it is
     // impossible to reach here.
+
+    /* istanbul ignore next */
+    return undefined;
   }
 
   async reset(identifier: TIdentifier): Promise<void> {

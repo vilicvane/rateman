@@ -27,7 +27,7 @@ const rateLimiter = new RateLimiter({
 });
 
 try {
-  await rateLimiter.throttle('<user id>');
+  await rateLimiter.attempt('<user id>');
 } catch (error) {
   if (error instanceof RateLimitReachedError) {
     console.error('rate limit reached', error.liftsAt);
@@ -37,7 +37,9 @@ try {
 }
 ```
 
-## Redis Connection
+## Options
+
+### Redis Connection
 
 Rateman uses [ioredis](https://github.com/luin/ioredis) for redis connection.
 
@@ -60,7 +62,7 @@ const rateLimiterA = new RateLimiter({
 });
 ```
 
-## Record Throttled
+### Record Throttled
 
 Rateman by default ignores throttled requests. It means that if a request is throttled, it will not have effect on the subsequential requests.
 
