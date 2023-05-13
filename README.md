@@ -30,7 +30,7 @@ try {
   await rateLimiter.attempt('<user id>');
 } catch (error) {
   if (error instanceof RateLimitExceededError) {
-    console.error('rate limit reached', error.liftsAt);
+    console.error('rate limit exceeded', error.liftsAt);
   } else {
     console.error(error);
   }
