@@ -53,6 +53,21 @@ await rateLimiter.attempt('<user id>', 3);
 
 Use `reset()` to reset the limit for an identifier.
 
+## Express
+
+Using Rateman with [Express](https://github.com/expressjs/express) is easy:
+
+```js
+app.use((req, _res, next) => {
+  const ip = req.headers['x-forwarded-for'] || req.ip;
+
+  void rateLimiter.attempt(ip).then(
+    () => next(),
+    error => next(error),
+  );
+});
+```
+
 ## Options
 
 ### Redis Connection
