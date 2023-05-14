@@ -1,6 +1,5 @@
 [![NPM version](https://img.shields.io/npm/v/rateman?color=d53a3b&style=flat-square)](https://www.npmjs.com/package/rateman)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-green?style=flat-square)](https://github.com/vilic/rateman/actions/workflows/ci.yml)
-[![MIT license](https://img.shields.io/github/license/vilic/rateman?style=flat-square&color=c6c8cc)](./LICENSE)
 
 # Rateman
 
