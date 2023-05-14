@@ -14,7 +14,8 @@
     "build": "rimraf ./bld && tsc --build",
     "lint": "run-in-every eslint-project --parallel --echo -- eslint --config {configFileName} --no-error-on-unmatched-pattern .",
     "lint-prettier": "prettier --check .",
-    "test": "yarn lint-prettier && yarn build && yarn lint && jest --coverage --forceExit"
+    "test": "yarn lint-prettier && yarn build && yarn lint && jest --coverage --forceExit",
+    "perf-test": "node ./bld/test/rate-limiter.perf.js"
   },
   "dependencies": {
     "ioredis": "^5.3.2",

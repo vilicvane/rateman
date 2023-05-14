@@ -1,27 +1,12 @@
 import {setTimeout} from 'timers/promises';
 
-import Redis from 'ioredis';
-
 import type {RateLimitExceededError} from 'rateman';
-import {RateLimiter} from 'rateman';
 
-const {REDIS_HOST, REDIS_PORT} = process.env;
-
-const REDIS_OPTIONS = {
-  host: REDIS_HOST,
-  port: Number(REDIS_PORT) || undefined,
-};
-
-const redis = new Redis(REDIS_OPTIONS);
-
-class TestRateLimiter extends RateLimiter {
-  override getKeyPrefix(): string {
-    return 'rateman-test';
-  }
-}
+import {REDIS_OPTIONS, redis} from './@redis';
+import {TestRateLimiter} from './@test-rate-limiter';
 
 beforeAll(async () => {
-  await cleanUpRedis(redis);
+  await TestRateLimiter.cleanUp(redis);
 });
 
 test('single window', async () => {
@@ -277,18 +262,5 @@ test('invalid multiplier', async () => {
 });
 
 afterAll(async () => {
-  await cleanUpRedis(redis);
-
-  await redis.quit();
+  await TestRateLimiter.cleanUp(redis, true);
 });
-
-async function cleanUpRedis(redis: Redis): Promise<void> {
-  await redis.eval(
-    `\
-for _, key in ipairs(redis.call('keys', 'rateman:*')) do
-  redis.call('del', key)
-end
-`,
-    0,
-  );
-}
