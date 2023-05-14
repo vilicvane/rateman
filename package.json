@@ -1,6 +1,6 @@
 {
   "name": "rateman",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Redis-based rate limiter with multi-window support.",
   "repository": "https://github.com/vilic/rateman.git",
   "license": "MIT",
