@@ -109,7 +109,7 @@ const rateLimiter = new RateLimiter({
 
 Tested on WSL2 / Redis (local, Docker) with i9 13900K.
 
-### 0-1,000 attempts with up to 1,000 records.
+### 0-1,000 multiplied attempts with up to 1,000 records.
 
 ```
 0-100: 22.570ms in total / 0.226ms per attempt (with multiplier 1).
@@ -124,7 +124,7 @@ Tested on WSL2 / Redis (local, Docker) with i9 13900K.
 900-1,000: 63.314ms in total / 0.633ms per attempt (with multiplier 1).
 ```
 
-### 0-100,000 attempts with up to 1,000 records.
+### 0-100,000 multiplied attempts with up to 1,000 records.
 
 ```
 0-10,000: 68.204ms in total / 0.682ms per attempt (with multiplier 100).
@@ -139,7 +139,7 @@ Tested on WSL2 / Redis (local, Docker) with i9 13900K.
 90,000-100,000: 902.005ms in total / 9.020ms per attempt (with multiplier 100).
 ```
 
-### 0-50,000 attempts with up to 50,000 records.
+### 0-50,000 multiplied attempts with up to 50,000 records.
 
 ```
 0-10,000: 24943.718ms in total / 2.494ms per attempt (with multiplier 1).
