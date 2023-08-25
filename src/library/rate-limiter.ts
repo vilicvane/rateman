@@ -18,13 +18,17 @@ export type RateLimiterOptions<TIdentifier> = {
   name: string;
   recordThrottled?: boolean;
   redis?: RedisOptions | Redis;
-  errorBuilder?(identifier: TIdentifier, liftsAt: number): Error;
+  errorBuilder?(name: string, identifier: TIdentifier, liftsAt: number): Error;
 } & ({window: RateLimitWindow} | {windows: RateLimitWindows});
 
 export class RateLimiter<TIdentifier = string> {
   readonly name: string;
 
-  readonly errorBuilder: (identifier: TIdentifier, liftsAt: number) => Error;
+  readonly errorBuilder: (
+    name: string,
+    identifier: TIdentifier,
+    liftsAt: number,
+  ) => Error;
 
   readonly windows: RateLimitWindow[];
   readonly minWindowLimit: number;
@@ -45,7 +49,7 @@ export class RateLimiter<TIdentifier = string> {
 
     this.errorBuilder =
       errorBuilder ??
-      ((identifier, liftsAt) =>
+      ((name, identifier, liftsAt) =>
         new RateLimitExceededError(
           name,
           identifier,
@@ -108,7 +112,7 @@ export class RateLimiter<TIdentifier = string> {
       return;
     }
 
-    throw this.errorBuilder(identifier, liftsAt);
+    throw this.errorBuilder(this.name, identifier, liftsAt);
   }
 
   /**

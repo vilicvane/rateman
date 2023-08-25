@@ -266,9 +266,9 @@ test('error builder', async () => {
     name: 'error-builder',
     window: {span: 200, limit: 3},
     redis,
-    errorBuilder(identifier, liftsAt) {
+    errorBuilder(name, identifier, liftsAt) {
       return new Error(
-        `Custom error for ${identifier} that lifts at ${typeof liftsAt}.`,
+        `Custom error for ${name} ${identifier} that lifts at ${typeof liftsAt}.`,
       );
     },
   });
@@ -281,7 +281,7 @@ test('error builder', async () => {
   await expect(() =>
     rateLimiter.attempt('foo'),
   ).rejects.toThrowErrorMatchingInlineSnapshot(
-    `"Custom error for foo that lifts at number."`,
+    `"Custom error for error-builder foo that lifts at number."`,
   );
 });
 
