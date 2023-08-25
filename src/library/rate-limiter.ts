@@ -91,12 +91,13 @@ export class RateLimiter<TIdentifier = string> {
     }
 
     throw new RateLimitExceededError(
+      this.name,
+      liftsAt,
       `Rate limit ${JSON.stringify(
         this.name,
       )} exceeded for identifier ${JSON.stringify(
         this.stringifyIdentifier(identifier),
       )}.`,
-      liftsAt,
     );
   }
 
