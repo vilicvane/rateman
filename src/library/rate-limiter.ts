@@ -48,6 +48,7 @@ export class RateLimiter<TIdentifier = string> {
       ((identifier, liftsAt) =>
         new RateLimitExceededError(
           name,
+          identifier,
           liftsAt,
           `Rate limit ${JSON.stringify(
             name,

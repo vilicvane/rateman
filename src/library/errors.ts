@@ -3,6 +3,7 @@ export class RateLimitExceededError extends Error {
 
   constructor(
     readonly rateLimiterName: string,
+    readonly identifier: unknown,
     readonly liftsAt: number,
     message: string,
   ) {
