@@ -14,14 +14,17 @@ export interface RateLimitWindow {
 
 export type RateLimitWindows = [RateLimitWindow, ...RateLimitWindow[]];
 
-export type RateLimiterOptions = {
+export type RateLimiterOptions<TIdentifier> = {
   name: string;
   recordThrottled?: boolean;
   redis?: RedisOptions | Redis;
+  errorBuilder?(identifier: TIdentifier, liftsAt: number): Error;
 } & ({window: RateLimitWindow} | {windows: RateLimitWindows});
 
 export class RateLimiter<TIdentifier = string> {
   readonly name: string;
+
+  readonly errorBuilder: (identifier: TIdentifier, liftsAt: number) => Error;
 
   readonly windows: RateLimitWindow[];
   readonly minWindowLimit: number;
@@ -35,9 +38,23 @@ export class RateLimiter<TIdentifier = string> {
     name,
     recordThrottled = false,
     redis,
+    errorBuilder,
     ...rest
-  }: RateLimiterOptions) {
+  }: RateLimiterOptions<TIdentifier>) {
     this.name = name;
+
+    this.errorBuilder =
+      errorBuilder ??
+      ((identifier, liftsAt) =>
+        new RateLimitExceededError(
+          name,
+          liftsAt,
+          `Rate limit ${JSON.stringify(
+            name,
+          )} exceeded for identifier ${JSON.stringify(
+            this.stringifyIdentifier(identifier),
+          )}.`,
+        ));
 
     const windows = 'windows' in rest ? rest.windows : [rest.window];
 
@@ -90,15 +107,7 @@ export class RateLimiter<TIdentifier = string> {
       return;
     }
 
-    throw new RateLimitExceededError(
-      this.name,
-      liftsAt,
-      `Rate limit ${JSON.stringify(
-        this.name,
-      )} exceeded for identifier ${JSON.stringify(
-        this.stringifyIdentifier(identifier),
-      )}.`,
-    );
+    throw this.errorBuilder(identifier, liftsAt);
   }
 
   /**

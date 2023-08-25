@@ -261,6 +261,30 @@ test('invalid multiplier', async () => {
   );
 });
 
+test('error builder', async () => {
+  const rateLimiter = new TestRateLimiter({
+    name: 'error-builder',
+    window: {span: 200, limit: 3},
+    redis,
+    errorBuilder(identifier, liftsAt) {
+      return new Error(
+        `Custom error for ${identifier} that lifts at ${typeof liftsAt}.`,
+      );
+    },
+  });
+
+  await rateLimiter.attempt('foo', 3);
+
+  await rateLimiter.attempt('bar');
+  await rateLimiter.attempt('bar');
+
+  await expect(() =>
+    rateLimiter.attempt('foo'),
+  ).rejects.toThrowErrorMatchingInlineSnapshot(
+    `"Custom error for foo that lifts at number."`,
+  );
+});
+
 afterAll(async () => {
   await TestRateLimiter.cleanUp(redis, true);
 });
